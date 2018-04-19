@@ -59,25 +59,33 @@ B1 = [zeros(3,1);
       inv(M)*f]; %Input
 C1 = [eye(3) zeros(3)]; %Cart Positions
 C2 = [0 0 1 0 0 0]; %Cart 3 Position
- 
+
+%% Control
+P = [ -2 -3 -4 -5 -6 -7 ]; %desired poles
+K = place(A, B1, P); %control gains
+
+ACL = A - B1*K; %closed-loop plant
+
+
 %% Simulation
-sys = ss(A, B1, C2, 0);
+sys = ss(ACL, B1, C2, 0);
 
 dt = 0.001; %sampling period
 tf = 5; %time duration
 t = 0:dt:tf; %time vector
-
 T = 0.5; %step train period
 
 %250mm Step Input
 u250 = 0.250;
 figure
 step(sys, stepDataOptions('StepAmplitude', u250))
-line([0 tf], [u250 u250])
+line([0 tf], [u250 u250], 'Color', 'k')
 
 %500mm Step Input
+u500 = 0.500;
 figure
-step(sys, stepDataOptions('StepAmplitude', 0.500))
+step(sys, stepDataOptions('StepAmplitude', u500))
+line([0 tf], [u500 u500], 'Color', 'k')
 
 %250mm Step Train Input
 u250T = 0.250*gensig('square', T, tf, dt) - 0.250/2;
