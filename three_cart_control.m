@@ -1,7 +1,7 @@
 %Three Cart Controller
 %Author: Alex McHugh
 %Created: 18/04/18
-%Last Edited: 18/04/18
+%Last Edited: 22/04/18
 
 clear
 close all
@@ -41,9 +41,6 @@ r = 0.0184; %pinion radius [m]
 beta = alpha * (km*kg)/(R*r);
 gamma = (km^2*kg^2)/(R*r^2);
 
-u = @(V, vd1) beta*V - gamma*vd1; %input voltage
-
-
 %% System
 M = diag([m1 m2 m3]);
 C = diag([c1+gamma c2 c3]);
@@ -60,41 +57,45 @@ B1 = [zeros(3,1);
 C1 = [eye(3) zeros(3)]; %Cart Positions
 C2 = [0 0 1 0 0 0]; %Cart 3 Position
 
-%% Control
-P = [ -2 -3 -4 -5 -6 -7 ]; %desired poles
+%% Control and Tracking
+P = [ -2 -20 -50 -40 -4 -10 ]; %desired poles
 K = place(A, B1, P); %control gains
 
 ACL = A - B1*K; %closed-loop plant
+N = -(C2*ACL^-1*B1)^-1; %tracking gain
+B1hat = @(r) B1*N*r; %tracking input matrix
 
 
 %% Simulation
-sys = ss(ACL, B1, C2, 0);
-
 dt = 0.001; %sampling period
-tf = 5; %time duration
+tf = 10; %time duration
 t = 0:dt:tf; %time vector
-T = 0.5; %step train period
+T = 2; %step train period
+
+steptrain = gensig('square', T, tf, dt) - 1/2;
 
 %250mm Step Input
-u250 = 0.250;
+r250 = 0.250;
+sys250 = ss(ACL, B1hat(r250), C2, 0);
 figure
-step(sys, stepDataOptions('StepAmplitude', u250))
-line([0 tf], [u250 u250], 'Color', 'k')
+step(sys250)
+line(xlim, [r250 r250], 'Color', 'k')
+title('250mm Step Input')
 
 %500mm Step Input
-u500 = 0.500;
+r500 = 0.500;
+sys500 = ss(ACL, B1hat(r500), C2, 0);
 figure
-step(sys, stepDataOptions('StepAmplitude', u500))
-line([0 tf], [u500 u500], 'Color', 'k')
-
-%250mm Step Train Input
-u250T = 0.250*gensig('square', T, tf, dt) - 0.250/2;
-figure
-lsim(sys, u250T, t)
-
-%500mm Step Train Input
-u500T = 0.500*gensig('square', T, tf, dt) - 0.500/2;
-figure
-lsim(sys, u500T, t)
+step(sys500)
+line(xlim, [r500 r500], 'Color', 'k')
 title('500mm Step Input')
 
+% 250mm Step Train Input
+figure
+lsim(sys250, steptrain, t)
+title('250mm Step Train Input')
+
+%500mm Step Train Input
+figure
+lsim(sys500, steptrain, t)
+title('500mm Step Train Input')
