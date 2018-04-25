@@ -69,7 +69,7 @@ B1hat = @(r) B1*N*r; %tracking input matrix
 %% Simulation
 dt = 0.001; %sampling period
 tf = 10; %time duration
-t = 0:dt:tf; %time vector
+%t = 0:dt:tf; %time vector
 T = 2; %step train period
 
 steptrain = gensig('square', T, tf, dt) - 1/2;
@@ -77,25 +77,58 @@ steptrain = gensig('square', T, tf, dt) - 1/2;
 %250mm Step Input
 r250 = 0.250;
 sys250 = ss(ACL, B1hat(r250), C2, 0);
+[y, t, x] = step(sys250);
+[V, dV] = controlValue(x, K, N, r250);
+
 figure
-step(sys250)
+subplot(2,1,1)
+stepplot(sys250);
 line(xlim, [r250 r250], 'Color', 'k')
 title('250mm Step Input')
 
-%500mm Step Input
-r500 = 0.500;
-sys500 = ss(ACL, B1hat(r500), C2, 0);
-figure
-step(sys500)
-line(xlim, [r500 r500], 'Color', 'k')
-title('500mm Step Input')
+subplot(2,1,2)
+plot(t, V, 'r')
 
-% 250mm Step Train Input
-figure
-lsim(sys250, steptrain, t)
-title('250mm Step Train Input')
+S = stepinfo(sys250);
+checkResponse(V, dV, y, r250);
 
-%500mm Step Train Input
-figure
-lsim(sys500, steptrain, t)
-title('500mm Step Train Input')
+% %500mm Step Input
+% r500 = 0.500;
+% sys500 = ss(ACL, B1hat(r500), C2, 0);
+% figure
+% step(sys500)
+% line(xlim, [r500 r500], 'Color', 'k')
+% title('500mm Step Input')
+
+% % 250mm Step Train Input
+% figure
+% lsim(sys250, steptrain, t)
+% title('250mm Step Train Input')
+% 
+% %500mm Step Train Input
+% figure
+% lsim(sys500, steptrain, t)
+% title('500mm Step Train Input')
+
+function [err, VPass, dVPass, setPass] = checkResponse(V, dV, y, r)
+    %Apparatus Limits
+    VLim = 12; %+/- V
+    dVLim = 30; %+/- V/s
+    setTol = 10e-3; %+/- m
+    
+    %Tests
+    err = r - y(end);
+    VPass = isempty(find(abs(V) > VLim, 1));
+    dVPass = isempty(find(abs(dV) > dVLim, 1));
+    setPass = abs(y(end) - r) < setTol;
+    
+    %Printed Results
+    resp = ["BAD","OK"];
+    fprintf("Error of %f [m] (%.1f%%)\n", err, err/r*100);
+    fprintf("Voltage %s. max = %.2f / %d [V]\n", ...
+            resp(VPass+1), max(abs(V)), VLim);
+    fprintf("Slew Rate %s. max = %.2f / %d [V/s]\n", ...
+            resp(dVPass+1), max(abs(dV)), dVLim);
+    fprintf("Settling %s. final = %.3f / %d [m]\n", ...
+            resp(setPass+1), y(end), r);
+end
