@@ -1,4 +1,4 @@
-function checkResponse(V, dV, y, r, VLim, dVLim, setTol)
+function checkResponse(V, dV, y, r, setTime, VLim, dVLim, setTol)
 %checkResponse Prints response info.
 %Determines if control effort and settling meets criteria.
     
@@ -9,9 +9,12 @@ dVPass = isempty(find(abs(dV) > dVLim, 1));
 setPass = abs(y(end) - r) < setTol;
 
 %Printed Results
-resp = ["BAD","OK"];
 fprintf("Error of %f [m] (%.1f%%)\n", ...
         err, err/r*100);
+fprintf("Settling time of %f [s]\n", ...
+        setTime);
+
+resp = ["BAD","OK"];
 fprintf("Voltage %s. max = %.2f / %d [V]\n", ...
         resp(VPass+1), max(abs(V)), VLim);
 fprintf("Slew Rate %s. max = %.2f / %d [V/s]\n", ...

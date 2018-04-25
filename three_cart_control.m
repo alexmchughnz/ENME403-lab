@@ -39,11 +39,11 @@ k = ka; %|| kb || kc
 alpha = 12.45;%fiddle factor
 km = 0.00176; %back emf constant
 kg = 3.71; %gear ratio
-R = 1.4; %armature resistance [ohms]
+Ra = 1.4; %armature resistance [ohms]
 r = 0.0184; %pinion radius [m]
 
-beta = alpha * (km*kg)/(R*r);
-gamma = (km^2*kg^2)/(R*r^2);
+beta = alpha * (km*kg)/(Ra*r);
+gamma = (km^2*kg^2)/(Ra*r^2);
 
 %% System
 M = diag([m1 m2 m3]);
@@ -53,7 +53,6 @@ K = [ k -k    0;
       0 -k    k];
 f = [beta; 0; 0];
 
-  
 A = [ zeros(3)  eye(3);
      -inv(M)*K -inv(M)*C]; %Plant Matrix
 B1 = [zeros(3,1);
@@ -62,9 +61,20 @@ C1 = [eye(3) zeros(3)]; %Cart Positions
 C2 = [0 0 1 0 0 0]; %Cart 3 Position
 
 %% Control and Tracking
-P = [ -2 -20 -50 -40 -4 -10 ]; %desired poles
-K = place(A, B1, P); %control gains
+lqrMode = true;
 
+if (lqrMode)
+    %LQR
+    R = 1.0;
+    Q = diag([1, 1, 2000, 1, 1, 1]);
+    [K, ~, P] = lqr(A, B1, Q, R);
+else
+    %Pole Placement
+    P = [ -7; -11; -40; -61; -30; -38 ]; %desired poles
+    K = place(A, B1, P); %control gains
+end
+
+%System
 ACL = A - B1*K; %closed-loop plant
 N = -(C2*ACL^-1*B1)^-1; %tracking gain
 B1hat = @(r) B1*N*r; %tracking input matrix
@@ -77,7 +87,7 @@ r500 = 0.500; %500mm step input
 
 %Simulation Settings
 r = r250; %tracking input
-trainOn = true;
+trainOn = false;
 T = 1; %step train period
 
 %Simulation
@@ -106,9 +116,9 @@ else
 end
 
 trainStr = {'', ['train (T = ', num2str(T), 's) ']};
-title([num2str(r * 1e3), 'mm step ', trainStr{trainOn+1} ...
-    'with poles = [', num2str(sort(P)), ']'])
-ylabel('input amplitude [m]')
+title([num2str(r * 1e3), 'mm step ', trainStr(trainOn+1), ...
+    'with poles = [', num2str(sort(P)'), ']'])
+ylabel('cart 3 amplitude [m]')
 
 subplot(2,1,2)
 plot(t, V, 'r')
@@ -117,19 +127,11 @@ xlabel('time [s]')
 
 if (trainOn) 
     target = r/2;
+    
 else
     target = r;
 end
-checkResponse(V, dV, y, target, VLim, dVLim, setTol);
 
-% % 250mm Step Train Input
-% figure
-% lsim(sys250, steptrain, t)
-% title('250mm Step Train Input')
-% 
-% %500mm Step Train Input
-% figure
-% lsim(sys500, steptrain, t)
-% title('500mm Step Train Input')
-
+S = lsiminfo(y, t, target);
+checkResponse(V, dV, y, target, S.SettlingTime, VLim, dVLim, setTol);
 
