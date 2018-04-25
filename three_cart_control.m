@@ -18,11 +18,11 @@ m1 = 1.608;
 
 m2a = 0.75;
 m2b = 1.25;
-m2 = m2a; %||m2b
+m2 = m2b; %||m2b
 
 m3a = 0.75; 
 m3b = 1.25;
-m3 = m3a; %||m3b
+m3 = m3b; %||m3b
 
 %Damping %[Ns/m]
 c1 = 0; 
@@ -61,7 +61,7 @@ C1 = [eye(3) zeros(3)]; %Cart Positions
 C2 = [0 0 1 0 0 0]; %Cart 3 Position
 
 %% Control and Tracking
-lqrMode = true;
+lqrMode = false;
 
 if (lqrMode)
     %LQR
@@ -70,7 +70,7 @@ if (lqrMode)
     [K, ~, P] = lqr(A, B1, Q, R);
 else
     %Pole Placement
-    P = [ -7; -11; -40; -61; -30; -38 ]; %desired poles
+    P = [-12+5i -12-5i -8-4i -8+4i -7 -6]; %desired poles
     K = place(A, B1, P); %control gains
 end
 
@@ -86,9 +86,9 @@ r250 = 0.250; %250mm step input
 r500 = 0.500; %500mm step input
 
 %Simulation Settings
-r = r250; %tracking input
-trainOn = false;
-T = 1; %step train period
+r = r500; %tracking input
+trainOn = true;
+T = 3.9; %step train period
 
 %Simulation
 sys = ss(ACL, B1hat(r), C2, 0);
@@ -116,8 +116,7 @@ else
 end
 
 trainStr = {'', ['train (T = ', num2str(T), 's) ']};
-title([num2str(r * 1e3), 'mm step ', trainStr(trainOn+1), ...
-    'with poles = [', num2str(sort(P)'), ']'])
+title([num2str(r * 1e3), 'mm step ', trainStr(trainOn+1)])
 ylabel('cart 3 amplitude [m]')
 
 subplot(2,1,2)
@@ -134,4 +133,5 @@ end
 
 S = lsiminfo(y, t, target);
 checkResponse(V, dV, y, target, S.SettlingTime, VLim, dVLim, setTol);
+fprintf(['Peak at:', num2str(t(find(y>target-1e-3,1)))])
 
