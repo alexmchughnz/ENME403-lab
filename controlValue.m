@@ -1,4 +1,4 @@
-function [ u du ] = controlValue(x, K, N, r)
+function [ u, du ] = controlValue(x, K, N, r)
 %controlValue Computes control effort from state values over time.
 %Designed for a tracking system where u = -Kx + Nr.
 

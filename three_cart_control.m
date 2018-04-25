@@ -8,6 +8,10 @@ close all
 clc
 
 %% Parameters
+%Apparatus Limits
+VLim = 12; %+/- V
+dVLim = 30; %+/- V/s
+setTol = 10e-3; %+/- m
 
 %Masses [kg]
 m1 = 1.608;
@@ -67,38 +71,56 @@ B1hat = @(r) B1*N*r; %tracking input matrix
 
 
 %% Simulation
-dt = 0.001; %sampling period
-tf = 10; %time duration
-%t = 0:dt:tf; %time vector
-T = 2; %step train period
+%Parameters
+r250 = 0.250; %250mm step input
+r500 = 0.500; %500mm step input
 
-steptrain = gensig('square', T, tf, dt) - 1/2;
+%Simulation Settings
+r = r250; %tracking input
+trainOn = true;
+T = 1; %step train period
 
-%250mm Step Input
-r250 = 0.250;
-sys250 = ss(ACL, B1hat(r250), C2, 0);
-[y, t, x] = step(sys250);
-[V, dV] = controlValue(x, K, N, r250);
+%Simulation
+sys = ss(ACL, B1hat(r), C2, 0);
 
+if (trainOn)
+    [steptrain, t] = gensig('square', T);
+    steptrain = steptrain - 1/2;
+    [y, t, x] = lsim(sys, steptrain, t);
+else
+    [y, t, x] = step(sys);
+end
+
+[V, dV] = controlValue(x, K, N, r);
+
+%Results
 figure
 subplot(2,1,1)
-stepplot(sys250);
-line(xlim, [r250 r250], 'Color', 'k')
-title('250mm Step Input')
+plot(t, y, 'b')
+hold on
+
+if (trainOn)
+    plot(t, steptrain*r, 'k')
+else
+    line(xlim, [r r], 'Color', 'k')
+end
+
+trainStr = {'', ['train (T = ', num2str(T), 's) ']};
+title([num2str(r * 1e3), 'mm step ', trainStr{trainOn+1} ...
+    'with poles = [', num2str(sort(P)), ']'])
+ylabel('input amplitude [m]')
 
 subplot(2,1,2)
 plot(t, V, 'r')
+ylabel('motor voltage [V]')
+xlabel('time [s]')
 
-S = stepinfo(sys250);
-checkResponse(V, dV, y, r250);
-
-% %500mm Step Input
-% r500 = 0.500;
-% sys500 = ss(ACL, B1hat(r500), C2, 0);
-% figure
-% step(sys500)
-% line(xlim, [r500 r500], 'Color', 'k')
-% title('500mm Step Input')
+if (trainOn) 
+    target = r/2;
+else
+    target = r;
+end
+checkResponse(V, dV, y, target, VLim, dVLim, setTol);
 
 % % 250mm Step Train Input
 % figure
@@ -110,25 +132,4 @@ checkResponse(V, dV, y, r250);
 % lsim(sys500, steptrain, t)
 % title('500mm Step Train Input')
 
-function [err, VPass, dVPass, setPass] = checkResponse(V, dV, y, r)
-    %Apparatus Limits
-    VLim = 12; %+/- V
-    dVLim = 30; %+/- V/s
-    setTol = 10e-3; %+/- m
-    
-    %Tests
-    err = r - y(end);
-    VPass = isempty(find(abs(V) > VLim, 1));
-    dVPass = isempty(find(abs(dV) > dVLim, 1));
-    setPass = abs(y(end) - r) < setTol;
-    
-    %Printed Results
-    resp = ["BAD","OK"];
-    fprintf("Error of %f [m] (%.1f%%)\n", err, err/r*100);
-    fprintf("Voltage %s. max = %.2f / %d [V]\n", ...
-            resp(VPass+1), max(abs(V)), VLim);
-    fprintf("Slew Rate %s. max = %.2f / %d [V/s]\n", ...
-            resp(dVPass+1), max(abs(dV)), dVLim);
-    fprintf("Settling %s. final = %.3f / %d [m]\n", ...
-            resp(setPass+1), y(end), r);
-end
+
