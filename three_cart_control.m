@@ -70,7 +70,7 @@ if (lqrMode)
     [K, ~, P] = lqr(A, B1, Q, R);
 else
     %Pole Placement
-    P = [-12+5i -12-5i -8-4i -8+4i -7 -6]; %desired poles
+    P = [-12+5i -12-5i -8+4i -8-4i -7 -6]; %desired poles
     K = place(A, B1, P); %control gains
 end
 
@@ -86,16 +86,16 @@ r250 = 0.250; %250mm step input
 r500 = 0.500; %500mm step input
 
 %Simulation Settings
-r = r500; %tracking input
+r = r250; %tracking input
 trainOn = true;
-T = 3.9; %step train period
+T = 3.3980; %step train period
 
 %Simulation
 sys = ss(ACL, B1hat(r), C2, 0);
 
 if (trainOn)
     [steptrain, t] = gensig('square', T);
-    steptrain = steptrain - 1/2;
+    steptrain = 1/2 - steptrain;
     [y, t, x] = lsim(sys, steptrain, t);
 else
     [y, t, x] = step(sys);
@@ -106,21 +106,26 @@ end
 %Results
 figure
 subplot(2,1,1)
-plot(t, y, 'b')
+plot(t, y, '-.')
 hold on
 
 if (trainOn)
-    plot(t, steptrain*r, 'k')
+    %plot(t, steptrain*r, 'k')
 else
     line(xlim, [r r], 'Color', 'k')
 end
 
 trainStr = {'', ['train (T = ', num2str(T), 's) ']};
-title([num2str(r * 1e3), 'mm step ', trainStr(trainOn+1)])
+if (lqrMode)
+    title([num2str(r * 1e3), 'mm step ', trainStr(trainOn+1), 'with LQR'])
+else
+	title([num2str(r * 1e3), 'mm step ', trainStr(trainOn+1)])
+end
 ylabel('cart 3 amplitude [m]')
 
 subplot(2,1,2)
-plot(t, V, 'r')
+plot(t, V, '-.')
+line(xlim, [0 0], 'Color', 'k')
 ylabel('motor voltage [V]')
 xlabel('time [s]')
 
@@ -133,5 +138,46 @@ end
 
 S = lsiminfo(y, t, target);
 checkResponse(V, dV, y, target, S.SettlingTime, VLim, dVLim, setTol);
-fprintf(['Peak at:', num2str(t(find(y>target-1e-3,1)))])
+fprintf('Peak at: %d\n', t(find(y>target-1e-3,1)))
 
+%% Actual Data
+tc1 = loadCartData('adm181s1');
+tc2 = loadCartData('adm181s2');
+tc3 = loadCartData('adm181s3');
+tcArray = {tc1 tc2 tc3};
+
+tcn = 3; %select gain setup
+tc = tcArray{tcn};
+
+if tcn == 1 || tcn == 2
+    i0 = find(tc.r > 0, 1);
+    tc.t = tc.t(i0:end) - tc.t(i0);
+    tc.r = tc.r(i0:end);
+    tc.x3 = tc.x3(i0:end);
+    tc.V = tc.V(i0:end);
+    
+    tf = 10;
+    %T1 = 13.262 @ 0.5m
+    %T2 = 11.072 @ 0.5m
+elseif tcn == 3
+    i0 = find(tc.r(17002:end) > 0, 1) + 17002;
+    tc.t = tc.t(i0:end) - tc.t(i0);
+    tc.r = tc.r(i0:end);
+    tc.x3 = tc.x3(i0:end);
+    tc.V = tc.V(i0:end);
+    
+    tf = 10;
+    %T3 = 3.3980 @ 0.25m
+end
+
+figure(1)
+subplot(2,1,1)
+hold on
+plot(tc.t, tc.r, 'k')
+plot(tc.t, tc.x3, 'b')
+xlim([0 tf])
+
+subplot(2,1,2)
+hold on
+plot(tc.t, tc.V, 'r')
+xlim([0 tf])
