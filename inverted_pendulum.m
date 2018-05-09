@@ -50,11 +50,11 @@ lqrMode = false;
 if (lqrMode)
     %LQR
     R = 1.0;
-    Q = eye(4);
+    Q = diag([5 1 0.001 1]);
     [K, ~, P] = lqr(A, B1, Q, R);
 else
     %Pole Placement
-    P = [ -2; -4; -8; -10 ]; %desired poles
+    P = [ -1; -2; -3; -4 ]; %desired poles
     K = place(A, B1, P); %control gains
 end
 
@@ -66,7 +66,7 @@ B1hat = @(r) B1*N*r; %tracking input matrix
 %% Simulation
 %Parameters
 r = 0.1; %[m]
-
+ 
 %Simulation
 sys = ss(ACL, B1hat(r), C1, 0);
 [y, t, x] = step(sys);
@@ -77,18 +77,22 @@ theta = y(:,2);
 %Results
 figure
 subplot(3,1,1)
-plot(t, xc, 'b')
+plot(t, xc, '--')
 line(xlim, [r r], 'Color', 'k')
-title([num2str(r * 1e3), 'mm step with poles = [', num2str(sort(P')), ']'])
+if (lqrMode)
+    title([num2str(r * 1e3), 'mm step with LQR'])
+else
+    title([num2str(r * 1e3), 'mm step with poles = [', num2str(sort(P')), ']'])
+end
 ylabel('x [m]')
 
 subplot(3,1,2)
-plot(t, theta, 'g')
+plot(t, theta, '--')
 ylabel('\theta [m]')
 line(xlim, [0 0], 'Color', 'k')
 
 subplot(3,1,3)
-plot(t, V, 'r')
+plot(t, V, '--')
 ylabel('V [V]')
 xlabel('time [s]')
 
@@ -100,5 +104,27 @@ stepCheck(r, Sx, stLim, rtLim, 0, errTol, [1 1 1 0 1])
 disp('theta')
 stepCheck(0, St, stLim, 0, osLim, errTol, [1 1 0 1 1])
 
+%% Actual Data
+ip1 = loadPendulumData('adm101s1');
+ip2 = loadPendulumData('adm101s2');
+ip = ip1;
 
+tf = ip.t(end); %|| ip.t(end)
 
+figure(1)
+subplot(3,1,1)
+hold on
+plot(ip.t, ip.x, 'b')
+xlim([0 tf])
+
+subplot(3,1,2)
+hold on
+plot(ip.t, ip.theta, 'g')
+xlim([0 tf])
+
+subplot(3,1,3)
+hold on
+plot(ip.t, ip.V, 'r')
+xlim([0 tf])
+
+legend('Simulated', 'Actual')
