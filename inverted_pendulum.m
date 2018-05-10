@@ -7,6 +7,33 @@ clear
 close all
 clc
 
+%% Actual Data
+ip1 = loadPendulumData('adm101s1');
+ip2 = loadPendulumData('adm101s2');
+ip = ip2;
+
+tf1 = 1.5;
+tf2 = ip.t(end);
+tf = tf2;
+
+
+figure(1)
+subplot(2,1,1)
+hold on
+plot(ip.t, ip.x, 'b')
+xlim([0 tf])
+
+subplot(2,1,2)
+hold on
+plot(ip.t, ip.theta, 'g')
+xlim([0 tf])
+
+figure(2)
+hold on
+plot(ip.t, ip.V, 'r')
+xlim([0 tf])
+
+
 %% Parameters
 %Apparatus Limits
 VLim = 10; %+/- V
@@ -45,16 +72,21 @@ C1 = [1 0 0 0;
 C2 = [1 0 0 0]; %x
 
 %% Control and Tracking
-lqrMode = false;
+lqrMode = true;
+realMode = true;
 
-if (lqrMode)
+if(realMode)
+    %Actual Gains/Poles
+    K = -abs(ip.K);
+    P = eig(A-B1*K);
+elseif (lqrMode)
     %LQR
     R = 1.0;
     Q = diag([5 1 0.001 1]);
     [K, ~, P] = lqr(A, B1, Q, R);
 else
     %Pole Placement
-    P = [ -1; -2; -3; -4 ]; %desired poles
+    P = [ -10; -20; -30; -4.8 ]; %desired poles
     K = place(A, B1, P); %control gains
 end
 
@@ -68,15 +100,21 @@ B1hat = @(r) B1*N*r; %tracking input matrix
 r = 0.1; %[m]
  
 %Simulation
+if realMode
+    x0 = [ip.x(1) ip.theta(1) ip.xdot(1) ip.thetadot(1)];
+else
+    x0 = zeros(1,4);
+end
+
 sys = ss(ACL, B1hat(r), C1, 0);
-[y, t, x] = step(sys);
+[y, t, x] = lsim(sys, ones(1, length(ip.t)), ip.t, x0);
 xc = y(:,1); %cart displacement
 theta = y(:,2);
 [V, dV] = controlValue(x, K, N, r);
 
 %Results
-figure
-subplot(3,1,1)
+figure(1)
+subplot(2,1,1)
 plot(t, xc, '--')
 line(xlim, [r r], 'Color', 'k')
 if (lqrMode)
@@ -85,17 +123,20 @@ else
     title([num2str(r * 1e3), 'mm step with poles = [', num2str(sort(P')), ']'])
 end
 ylabel('x [m]')
+legend('Actual', 'Simulated')
 
-subplot(3,1,2)
+subplot(2,1,2)
 plot(t, theta, '--')
-ylabel('\theta [m]')
+ylabel('\theta [rad]')
 line(xlim, [0 0], 'Color', 'k')
 
-subplot(3,1,3)
+figure(2)
 plot(t, V, '--')
+line(xlim, [0 0], 'Color', 'k')
 ylabel('V [V]')
 xlabel('time [s]')
 
+%Printed Info
 Sx = stepinfo(xc, t, r);
 St = stepinfo(theta, t);
 checkResponse(V, dV, xc, r, Sx.SettlingTime, VLim, dVLim, errTol);
@@ -104,27 +145,4 @@ stepCheck(r, Sx, stLim, rtLim, 0, errTol, [1 1 1 0 1])
 disp('theta')
 stepCheck(0, St, stLim, 0, osLim, errTol, [1 1 0 1 1])
 
-%% Actual Data
-ip1 = loadPendulumData('adm101s1');
-ip2 = loadPendulumData('adm101s2');
-ip = ip1;
 
-tf = ip.t(end); %|| ip.t(end)
-
-figure(1)
-subplot(3,1,1)
-hold on
-plot(ip.t, ip.x, 'b')
-xlim([0 tf])
-
-subplot(3,1,2)
-hold on
-plot(ip.t, ip.theta, 'g')
-xlim([0 tf])
-
-subplot(3,1,3)
-hold on
-plot(ip.t, ip.V, 'r')
-xlim([0 tf])
-
-legend('Simulated', 'Actual')

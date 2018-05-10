@@ -7,6 +7,53 @@ clear
 close all
 clc
 
+
+%% Actual Data
+tc1 = loadCartData('adm181s1');
+tc2 = loadCartData('adm181s2');
+tc3 = loadCartData('adm181s3');
+tcArray = {tc1 tc2 tc3};
+
+tcn = 2; %select gain setup
+tc = tcArray{tcn};
+
+Tarray = [13.262 11.072 3.3980];
+T = Tarray(tcn);
+rArray = [0.500 0.500 0.250];
+r = rArray(tcn);
+
+if tcn == 1 || tcn == 2
+    i0 = find(tc.r > 0, 1);
+    tc.t = tc.t(i0:end) - tc.t(i0);
+    tc.r = tc.r(i0:end);
+    tc.x3 = tc.x3(i0:end);
+    tc.V = tc.V(i0:end);
+    tf = 10; %display limit
+    
+elseif tcn == 3
+    i0 = find(tc.r(17002:end) > 0, 1) + 17002;
+    tc.t = tc.t(i0:end) - tc.t(i0);
+    tc.r = tc.r(i0:end);
+    tc.x3 = tc.x3(i0:end);
+    tc.V = tc.V(i0:end);
+    tf = 2*T; %display limit
+end
+
+
+
+
+%Plot real data
+figure(1)
+hold on
+plot(tc.t, tc.r, 'k')
+plot(tc.t, tc.x3, 'b')
+xlim([0 tf])
+
+figure(2)
+hold on
+plot(tc.t, tc.V, 'r')
+xlim([0 tf])
+
 %% Parameters
 %Apparatus Limits
 VLim = 12; %+/- V
@@ -40,10 +87,10 @@ alpha = 12.45;%fiddle factor
 km = 0.00176; %back emf constant
 kg = 3.71; %gear ratio
 Ra = 1.4; %armature resistance [ohms]
-r = 0.0184; %pinion radius [m]
+rp = 0.0184; %pinion radius [m]
 
-beta = alpha * (km*kg)/(Ra*r);
-gamma = (km^2*kg^2)/(Ra*r^2);
+beta = alpha * (km*kg)/(Ra*rp);
+gamma = (km^2*kg^2)/(Ra*rp^2);
 
 %% System
 M = diag([m1 m2 m3]);
@@ -62,11 +109,16 @@ C2 = [0 0 1 0 0 0]; %Cart 3 Position
 
 %% Control and Tracking
 lqrMode = false;
+realMode = true;
 
-if (lqrMode)
+if(realMode)
+    %Actual Gains/Poles
+    K = tc.K;
+    P = eig(A-B1*K);
+elseif (lqrMode)
     %LQR
     R = 1.0;
-    Q = diag([1, 1, 2000, 1, 1, 1]);
+    Q = diag([0.01 0.01 200 0.01 0.01 10]);
     [K, ~, P] = lqr(A, B1, Q, R);
 else
     %Pole Placement
@@ -86,17 +138,22 @@ r250 = 0.250; %250mm step input
 r500 = 0.500; %500mm step input
 
 %Simulation Settings
-r = r250; %tracking input
 trainOn = true;
-T = 3.3980; %step train period
 
+if realMode
+    x0 = [tc.x1(1) tc.x2(1) tc.x3(1) tc.x1dot(1) tc.x1dot(2) tc.x1dot(3)];
+else
+    r = r250; %tracking input
+    T = 3.3980; %step train period
+    x0 = zeros(1,6);
+end
 %Simulation
 sys = ss(ACL, B1hat(r), C2, 0);
 
 if (trainOn)
     [steptrain, t] = gensig('square', T);
     steptrain = 1/2 - steptrain;
-    [y, t, x] = lsim(sys, steptrain, t);
+    [y, t, x] = lsim(sys, steptrain, t, x0);
 else
     [y, t, x] = step(sys);
 end
@@ -104,10 +161,11 @@ end
 [V, dV] = controlValue(x, K, N, r);
 
 %Results
-figure
-subplot(2,1,1)
+figure(1)
 plot(t, y, '-.')
 hold on
+ylabel('cart 3 position [m]')
+xlabel('time [s]')
 
 if (trainOn)
     %plot(t, steptrain*r, 'k')
@@ -121,9 +179,8 @@ if (lqrMode)
 else
 	title([num2str(r * 1e3), 'mm step ', trainStr(trainOn+1)])
 end
-ylabel('cart 3 amplitude [m]')
 
-subplot(2,1,2)
+figure(2)
 plot(t, V, '-.')
 line(xlim, [0 0], 'Color', 'k')
 ylabel('motor voltage [V]')
@@ -139,45 +196,3 @@ end
 S = lsiminfo(y, t, target);
 checkResponse(V, dV, y, target, S.SettlingTime, VLim, dVLim, setTol);
 fprintf('Peak at: %d\n', t(find(y>target-1e-3,1)))
-
-%% Actual Data
-tc1 = loadCartData('adm181s1');
-tc2 = loadCartData('adm181s2');
-tc3 = loadCartData('adm181s3');
-tcArray = {tc1 tc2 tc3};
-
-tcn = 3; %select gain setup
-tc = tcArray{tcn};
-
-if tcn == 1 || tcn == 2
-    i0 = find(tc.r > 0, 1);
-    tc.t = tc.t(i0:end) - tc.t(i0);
-    tc.r = tc.r(i0:end);
-    tc.x3 = tc.x3(i0:end);
-    tc.V = tc.V(i0:end);
-    
-    tf = 10;
-    %T1 = 13.262 @ 0.5m
-    %T2 = 11.072 @ 0.5m
-elseif tcn == 3
-    i0 = find(tc.r(17002:end) > 0, 1) + 17002;
-    tc.t = tc.t(i0:end) - tc.t(i0);
-    tc.r = tc.r(i0:end);
-    tc.x3 = tc.x3(i0:end);
-    tc.V = tc.V(i0:end);
-    
-    tf = 10;
-    %T3 = 3.3980 @ 0.25m
-end
-
-figure(1)
-subplot(2,1,1)
-hold on
-plot(tc.t, tc.r, 'k')
-plot(tc.t, tc.x3, 'b')
-xlim([0 tf])
-
-subplot(2,1,2)
-hold on
-plot(tc.t, tc.V, 'r')
-xlim([0 tf])
